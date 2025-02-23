@@ -46,9 +46,10 @@ pub fn HashBackedArray(comptime V: type) type {
         }
 
         pub fn get(self: *Self, key: []const u8) ?V {
-            if (!self.has(key)) return null;
+            const item_idx = self._index_map.get(key) orelse
+                return null;
 
-            return self._array[self._index_map.get(key)];
+            return self._array[item_idx];
         }
 
         pub fn indexOf(self: *Self, key: []const u8) ?u8 {
