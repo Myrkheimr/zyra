@@ -19,12 +19,12 @@ pub fn HashBackedArray(comptime V: type) type {
 
         pub const KV = struct { []const u8, V };
 
-        pub fn initComptime(comptime Arr: []const V, comptime key: fn (e: V) []const u8) Self {
+        pub fn initComptime(comptime Arr: []const V, comptime key_gen: fn (e: V) []const u8) Self {
             const kvs = comptime blk: {
                 var arr: [Arr.len]KV = undefined;
 
                 for (Arr, 0..) |a, i| {
-                    arr[i] = .{ key(a), i };
+                    arr[i] = .{ key_gen(a), i };
                 }
 
                 break :blk arr[0..];
