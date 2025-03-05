@@ -1,6 +1,7 @@
 .{
-    .name = "zyra",
+    .name = .zyra,
     .version = "1.0.0-dev",
+    .fingerprint = 0x595a8681f4234bb5,
     .paths = .{
         "src",
         "build.zig",
