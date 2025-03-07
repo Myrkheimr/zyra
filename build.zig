@@ -42,10 +42,16 @@ pub fn build(b: *std.Build) void {
     // running `zig build`).
     b.installArtifact(zyra);
 
+    const zyra_test = b.createModule(.{
+        .root_source_file = b.path("src/test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const lib_unit_tests = b.addTest(.{
-        .root_module = zyra_mod,
+        .root_module = zyra_test,
     });
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
