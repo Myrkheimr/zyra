@@ -43,7 +43,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(zyra);
 
     const zyra_test = b.createModule(.{
-        .root_source_file = b.path("src/test.zig"),
+        .root_source_file = b.path("src/zyra.zig"),
         .target = target,
         .optimize = optimize,
     });
