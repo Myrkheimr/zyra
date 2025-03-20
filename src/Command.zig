@@ -1,51 +1,49 @@
-const Self = @This();
+const Command = @This();
 
 const std = @import("std");
+const Flag = @import("Flag.zig");
+const Option = @import("Option.zig");
+
 const testing = std.testing;
 
 name: []const u8,
 help: []const u8 = "",
-sub_cmds: ?[]Self = null,
-handler: ?fn (args: [][]const u8) anyerror!void = null,
+flags: []const Flag = &[0]Flag{},
+options: []const Option = &[0]Option{},
+sub_cmds: []const Command = &[0]Command{},
+handler: ?fn (args: [][]const u8) void = null,
 
-pub fn run(self: *const Self, args: [][]const u8) !void {
-    if (args.len == 0) {
-        std.debug.print("Usage: {s}\n", .{self.name});
-        return;
-    }
-
-    if (self.sub_cmds) |cmds| {
-        for (cmds) |cmd| {
-            if (std.mem.eql(u8, args[0], cmd.name)) {
-                cmd.run(args[1..]);
-                return;
-            }
+pub fn run(self: *const Command, args: [][]const u8) void {
+    inline for (self.sub_cmds) |cmd| {
+        if (std.mem.eql(u8, args[0], cmd.name)) {
+            cmd.run(args[1..]);
+            return;
         }
     }
 
     if (self.handler) |handle| {
-        try handle(args);
+        handle(args);
     } else {
         std.debug.print("Unknown Command: {s}\n", .{args[0]});
+    }
+
+    if (args.len == 0) {
+        std.debug.print("Usage: {s}\n", .{self.name});
+        return;
     }
 }
 
 test "init" {
     const name = "test";
     const help = "test help";
-    const cmd = Self{ .name = name, .help = help };
+    const cmd = Command{ .name = name, .help = help };
 
     try testing.expectEqualStrings(name, cmd.name);
     try testing.expectEqualStrings(help, cmd.help);
 }
 
-fn testSuccessHandler(args: [][]const u8) !void {
+fn testHandler(args: [][]const u8) void {
     _ = args;
-}
-
-fn testFailureHandler(args: [][]const u8) !void {
-    _ = args;
-    return error.SomeFailure;
 }
 
 test "handler" {
@@ -60,27 +58,18 @@ test "handler" {
 
     defer allocator.free(args);
 
-    const cmd_success = Self{ .name = name, .help = help, .handler = testSuccessHandler };
+    const cmd = Command{ .name = name, .help = help, .handler = testHandler };
     const handler_success = blk: {
-        cmd_success.run(args) catch break :blk false;
+        cmd.run(args);
         break :blk true;
     };
+
     try testing.expect(handler_success);
-
-    // Failure
-    const cmd_failure = Self{ .name = name, .help = help, .handler = testFailureHandler };
-    const handler_failure = blk: {
-        cmd_failure.run(args) catch break :blk false;
-        break :blk true;
-    };
-
-    try testing.expect(!handler_failure);
-    try testing.expectError(error.SomeFailure, cmd_failure.run(args));
 }
 
-var test1_executed = false;
-fn test1_handler(_: [][]const u8) anyerror!void {
-    test1_executed = true;
+var sub_test1_executed = false;
+fn sub_test1_handler(_: [][]const u8) void {
+    sub_test1_executed = true;
 }
 
 test "sub commands" {
@@ -93,20 +82,20 @@ test "sub commands" {
     unknown_args[1] = "two";
     unknown_args[2] = "three";
 
-    const cmd = Self{
+    const cmd = Command{
         .name = name,
         .help = help,
-        .sub_cmds = &[_]Self{.{ .name = "test1", .help = "test1 help", .handler = test1_handler }},
+        .sub_cmds = &[_]Command{.{ .name = "test1", .help = "test1 help", .handler = sub_test1_handler }},
     };
     cmd.run(unknown_args);
     allocator.free(unknown_args);
 
-    try testing.expectEqual(false, test1_executed);
+    try testing.expectEqual(false, sub_test1_executed);
 
     var args = try allocator.alloc([]const u8, 1);
     args[0] = "test1";
     defer allocator.free(args);
 
-    cmd.run(unknown_args);
-    try testing.expect(test1_executed);
+    cmd.run(args);
+    try testing.expect(sub_test1_executed);
 }
