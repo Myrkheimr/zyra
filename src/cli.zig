@@ -7,17 +7,6 @@ const StaticStringOptionMap = std.StaticStringMap([]const u8);
 const StaticStringSetEntry = struct { []const u8 };
 const StaticStringOptionMapEntry = struct { []const u8, []const u8 };
 
-const ComptimeCommand = struct {
-    name: []const u8,
-    option_set: StaticStringSet,
-    short_to_long_option_mapping: StaticStringOptionMap,
-};
-
-const CommandSpec = struct {
-    options: []const u8 = "",
-    sub_cmds: []const ComptimeCommand = &[_]ComptimeCommand{},
-};
-
 fn countValidOptions(comptime name: []const u8, comptime options: []const u8) usize {
     var count: usize = 0;
 
@@ -46,8 +35,23 @@ fn countValidOptions(comptime name: []const u8, comptime options: []const u8) us
     return count;
 }
 
+const ComptimeCommandInternal = struct {
+    option_set: StaticStringSet,
+    short_to_long_option_mapping: StaticStringOptionMap,
+};
+
+pub const ComptimeCommand = struct {
+    name: []const u8,
+    _internal: ComptimeCommandInternal,
+};
+
+pub const CommandSpec = struct {
+    options: []const u8 = "",
+    sub_cmds: []const ComptimeCommand = &[_]ComptimeCommand{},
+};
+
 pub fn Command(comptime name: []const u8, comptime Spec: CommandSpec) ComptimeCommand {
-    const optionSetEntries, const shortToLongOptionMapEntries = comptime option_gen: {
+    const comptime_command_internal = comptime command_internal: {
         const option_count = countValidOptions(name, Spec.options);
 
         var setEntries: [option_count]StaticStringSetEntry = undefined;
@@ -111,13 +115,17 @@ pub fn Command(comptime name: []const u8, comptime Spec: CommandSpec) ComptimeCo
             ),
         );
 
-        break :option_gen .{ setEntries, mapEntries };
+        const internal: ComptimeCommandInternal = .{
+            .option_set = StaticStringSet.initComptime(setEntries),
+            .short_to_long_option_mapping = StaticStringOptionMap.initComptime(mapEntries),
+        };
+
+        break :command_internal internal;
     };
 
     return .{
         .name = name,
-        .option_set = StaticStringSet.initComptime(optionSetEntries),
-        .short_to_long_option_mapping = StaticStringOptionMap.initComptime(shortToLongOptionMapEntries),
+        ._internal = comptime_command_internal,
     };
 }
 
@@ -138,20 +146,20 @@ test "Command" {
     );
 
     try testing.expectEqualStrings(name, cmd.name);
-    try testing.expectEqual(long_options.len, cmd.option_set.keys().len);
-    try testing.expectEqual(short_options.len, cmd.short_to_long_option_mapping.keys().len);
-    try testing.expectEqual(cmd.option_set.keys().len, cmd.short_to_long_option_mapping.keys().len);
+    try testing.expectEqual(long_options.len, cmd._internal.option_set.keys().len);
+    try testing.expectEqual(short_options.len, cmd._internal.short_to_long_option_mapping.keys().len);
+    try testing.expectEqual(cmd._internal.option_set.keys().len, cmd._internal.short_to_long_option_mapping.keys().len);
 
     for (long_options) |opt| {
-        try testing.expect(cmd.option_set.has(opt));
+        try testing.expect(cmd._internal.option_set.has(opt));
     }
 
     for (short_options) |opt| {
-        try testing.expect(cmd.short_to_long_option_mapping.has(opt));
+        try testing.expect(cmd._internal.short_to_long_option_mapping.has(opt));
     }
 
-    for (cmd.short_to_long_option_mapping.keys()) |key| {
-        const mapping = cmd.short_to_long_option_mapping.get(key) orelse "";
-        try testing.expect(cmd.option_set.has(mapping));
+    for (cmd._internal.short_to_long_option_mapping.keys()) |key| {
+        const mapping = cmd._internal.short_to_long_option_mapping.get(key) orelse "";
+        try testing.expect(cmd._internal.option_set.has(mapping));
     }
 }
