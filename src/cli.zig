@@ -35,17 +35,17 @@ fn countValidOptions(comptime name: []const u8, comptime options: []const u8) us
     return count;
 }
 
-const ComptimeCommandInternal = struct {
-    option_set: StaticStringSet,
-    short_to_long_option_mapping: StaticStringOptionMap,
-};
-
 pub const ComptimeCommand = struct {
     name: []const u8,
     commands: []const Self,
-    _internal: ComptimeCommandInternal,
+    _internal: Internal,
 
     const Self = @This();
+
+    const Internal = struct {
+        option_set: StaticStringSet,
+        short_to_long_option_mapping: StaticStringOptionMap,
+    };
 
     pub fn long_options(self: *const Self) StaticStringSet {
         return self._internal.option_set;
@@ -68,7 +68,7 @@ pub const CommandSpec = struct {
 };
 
 pub fn Command(comptime name: []const u8, comptime Spec: CommandSpec) ComptimeCommand {
-    const comptime_command_internal = comptime command_internal: {
+    const internal: ComptimeCommand.Internal = internal: {
         const option_count = countValidOptions(name, Spec.options);
 
         var setEntries: [option_count]StaticStringSetEntry = undefined;
@@ -132,18 +132,16 @@ pub fn Command(comptime name: []const u8, comptime Spec: CommandSpec) ComptimeCo
             ),
         );
 
-        const internal: ComptimeCommandInternal = .{
+        break :internal .{
             .option_set = StaticStringSet.initComptime(setEntries),
             .short_to_long_option_mapping = StaticStringOptionMap.initComptime(mapEntries),
         };
-
-        break :command_internal internal;
     };
 
     return .{
         .name = name,
         .commands = Spec.commands,
-        ._internal = comptime_command_internal,
+        ._internal = internal,
     };
 }
 
