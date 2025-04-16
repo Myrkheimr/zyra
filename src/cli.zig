@@ -42,12 +42,29 @@ const ComptimeCommandInternal = struct {
 
 pub const ComptimeCommand = struct {
     name: []const u8,
+    commands: []const Self,
     _internal: ComptimeCommandInternal,
+
+    const Self = @This();
+
+    pub fn long_options(self: *const Self) StaticStringSet {
+        return self._internal.option_set;
+    }
+
+    pub fn short_options(self: *const Self) StaticStringOptionMap {
+        return self._internal.short_to_long_option_mapping;
+    }
+
+    pub fn run(self: Self, options: anytype, positionals: [][]const u8) void {
+        if (self._internal.handler) |handler| {
+            handler(options, positionals);
+        }
+    }
 };
 
 pub const CommandSpec = struct {
     options: []const u8 = "",
-    sub_cmds: []const ComptimeCommand = &[_]ComptimeCommand{},
+    commands: []const ComptimeCommand = &[_]ComptimeCommand{},
 };
 
 pub fn Command(comptime name: []const u8, comptime Spec: CommandSpec) ComptimeCommand {
@@ -125,14 +142,17 @@ pub fn Command(comptime name: []const u8, comptime Spec: CommandSpec) ComptimeCo
 
     return .{
         .name = name,
+        .commands = Spec.commands,
         ._internal = comptime_command_internal,
     };
 }
 
-test "Command" {
+test {
     const name = "test";
     const long_options = [_][]const u8{ "output", "verbose", "help" };
     const short_options = [_][]const u8{ "o", "v", "h" };
+    // These are only names of the sub commands.
+    const sub_cmds = [_][]const u8{"sub_test"};
 
     const cmd = Command(
         "test",
@@ -142,24 +162,53 @@ test "Command" {
             \\ -v, --verbose    Enable verbose mode
             \\ -h, --help       Show this help message and exit
             ,
+            .commands = &.{
+                Command(
+                    "sub_test",
+                    .{
+                        .options =
+                        \\ -h, --help       Show this help message and exit
+                        ,
+                    },
+                ),
+            },
         },
     );
 
+    // Root Command Name
     try testing.expectEqualStrings(name, cmd.name);
-    try testing.expectEqual(long_options.len, cmd._internal.option_set.keys().len);
-    try testing.expectEqual(short_options.len, cmd._internal.short_to_long_option_mapping.keys().len);
-    try testing.expectEqual(cmd._internal.option_set.keys().len, cmd._internal.short_to_long_option_mapping.keys().len);
 
+    // Defined Options
+    try testing.expectEqual(long_options.len, cmd.long_options().keys().len);
+    try testing.expectEqual(short_options.len, cmd.short_options().keys().len);
+    try testing.expectEqual(sub_cmds.len, cmd.commands.len);
+
+    // Check mapping
+    try testing.expectEqual(cmd.long_options().keys().len, cmd.short_options().keys().len);
+
+    // Validate long options
     for (long_options) |opt| {
-        try testing.expect(cmd._internal.option_set.has(opt));
+        try testing.expect(cmd.long_options().has(opt));
     }
 
+    // Validate short options
     for (short_options) |opt| {
-        try testing.expect(cmd._internal.short_to_long_option_mapping.has(opt));
+        try testing.expect(cmd.short_options().has(opt));
     }
 
-    for (cmd._internal.short_to_long_option_mapping.keys()) |key| {
-        const mapping = cmd._internal.short_to_long_option_mapping.get(key) orelse "";
-        try testing.expect(cmd._internal.option_set.has(mapping));
+    // Validate mappings
+    for (cmd.short_options().keys()) |key| {
+        const mapping = cmd.short_options().get(key) orelse "";
+        try testing.expect(cmd.long_options().has(mapping));
+    }
+
+    // Validate Sub Commands
+    for (sub_cmds) |sub_cmd| {
+        var found = false;
+        for (cmd.commands) |command| {
+            if (std.mem.eql(u8, sub_cmd, command.name)) found = true;
+        }
+
+        try testing.expect(found);
     }
 }
