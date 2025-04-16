@@ -4,8 +4,6 @@ const testing = std.testing;
 const StaticStringSet = std.StaticStringMap(void);
 const StaticStringOptionMap = std.StaticStringMap([]const u8);
 
-const Handler = fn (options: anytype, positionals: [][]const u8) void;
-
 const StaticStringSetEntry = struct { []const u8 };
 const StaticStringOptionMapEntry = struct { []const u8, []const u8 };
 
@@ -40,30 +38,20 @@ fn countValidOptions(comptime name: []const u8, comptime options: []const u8) us
 const ComptimeCommandInternal = struct {
     option_set: StaticStringSet,
     short_to_long_option_mapping: StaticStringOptionMap,
-    handler: ?Handler = null,
 };
 
 pub const ComptimeCommand = struct {
     name: []const u8,
     _internal: ComptimeCommandInternal,
-
-    const Self = @This();
-
-    pub fn run(self: Self, options: anytype, positionals: [][]const u8) void {
-        if (self._internal.handler) |handler| {
-            handler(options, positionals);
-        }
-    }
 };
 
 pub const CommandSpec = struct {
-    sub_cmds: []const ComptimeCommand = &[_]ComptimeCommand{},
     options: []const u8 = "",
-    handler: ?Handler = null,
+    sub_cmds: []const ComptimeCommand = &[_]ComptimeCommand{},
 };
 
 pub fn Command(comptime name: []const u8, comptime Spec: CommandSpec) ComptimeCommand {
-    var comptime_internal = comptime command_internal: {
+    const comptime_command_internal = comptime command_internal: {
         const option_count = countValidOptions(name, Spec.options);
 
         var setEntries: [option_count]StaticStringSetEntry = undefined;
@@ -135,12 +123,9 @@ pub fn Command(comptime name: []const u8, comptime Spec: CommandSpec) ComptimeCo
         break :command_internal internal;
     };
 
-    // Override the default internal handler with specified handler (if provided)
-    comptime_internal.handler = Spec.handler;
-
     return .{
         .name = name,
-        ._internal = comptime_internal,
+        ._internal = comptime_command_internal,
     };
 }
 
@@ -164,7 +149,6 @@ test "Command" {
     try testing.expectEqual(long_options.len, cmd._internal.option_set.keys().len);
     try testing.expectEqual(short_options.len, cmd._internal.short_to_long_option_mapping.keys().len);
     try testing.expectEqual(cmd._internal.option_set.keys().len, cmd._internal.short_to_long_option_mapping.keys().len);
-    try testing.expectEqual(null, cmd._internal.handler);
 
     for (long_options) |opt| {
         try testing.expect(cmd._internal.option_set.has(opt));
